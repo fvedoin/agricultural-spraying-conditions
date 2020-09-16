@@ -5,9 +5,10 @@
 #define redLed 0
 #define blueLed 5
 #define yellowLed 4
+#define decrease D7
+#define increase D8
 
-int maxHum = 60;
-int maxTemp = 40;
+int flow = 0;
 
 DHT dht(DHTPIN, DHTTYPE);
 
@@ -15,6 +16,8 @@ void setup() {
   pinMode(redLed, OUTPUT);
   pinMode(blueLed, OUTPUT);
   pinMode(yellowLed, OUTPUT);
+  pinMode(decrease, INPUT);
+  pinMode(increase, INPUT);
   Serial.begin(9600); 
   dht.begin();
 }
@@ -29,24 +32,32 @@ void loop() {
   // Read temperature as Celsius
   float t = dht.readTemperature();
   
+  if(digitalRead(decrease) == 1){
+    flow = flow-1;
+  }
+
+  if(digitalRead(increase) == 1){
+    flow = flow+1;
+  }
+  
   // Check if any reads failed and exit early.
-  if (isnan(h) || isnan(t)) {
+  if (isnan(h) || isnan(t) || isnan(w)) {
     Serial.println("Failed to read from DHT sensor!");
     return;
   }
   int cWind, cHumidity, cTemperature;
   
-  if(t < 10 or t > 35) {
+  if(t < 10 || t > 35) {
     cTemperature = 3;
-  } else if((t >= 10 && t < 20) or (t > 30 or t <= 35)){
+  } else if((t >= 10 && t < 20) || (t > 30 && t <= 35)){
     cTemperature = 2;
   } else if(t >= 20 && t <= 30){
     cTemperature = 1;
   }
 
-  if(h < 60 or h > 95) {
+  if(h < 60 || h > 95) {
     cHumidity = 3;
-  } else if((h >= 60 && h < 70) or (h > 90 or h <= 95)){
+  } else if((h >= 60 && h < 70) || (h > 90 && h <= 95)){
     cHumidity = 2;
   } else if(h >= 70 && h <= 90){
     cHumidity = 1;
@@ -54,13 +65,13 @@ void loop() {
 
   if(w <= 10) {
     cWind = 1;
-  } else{
+  } else {
     cWind = 3;
   }
 
-  float condition = (cTemperature + cWind + cHumidity) / 3;
+  float condition = (cTemperature + cWind + cHumidity) / 3.0;
 
-  if(condition == 1){
+  if(condition == 1.00){
     digitalWrite(blueLed, HIGH);
     digitalWrite(redLed, LOW);
     digitalWrite(yellowLed, LOW);
@@ -80,8 +91,14 @@ void loop() {
   Serial.print("Temperature: "); 
   Serial.print(t);
   Serial.print(" *C ");
-  Serial.print(" %\t");
+  Serial.print("\t");
   Serial.print("Wind: ");
   Serial.print(w);
   Serial.println(" Km/h ");
+
+  if(flow > 0){
+    Serial.print("*Spraying* \t Flow: ");
+    Serial.print(flow);
+    Serial.println(" L/s");
+  }
 }
