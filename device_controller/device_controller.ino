@@ -3,13 +3,17 @@
 #include <ESP8266WiFi.h>
 #include <Ticker.h>
 #include <AsyncMqttClient.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 //Wifi configs
-#define WIFI_SSID "At"
-#define WIFI_PASSWORD "felipe10"
+#define WIFI_SSID "YOUR WIFI SSID"
+#define WIFI_PASSWORD "YOUR WIFI PASSWORD"
 
 //MQTT configs
-#define MQTT_HOST IPAddress(192, 168, 43, 39)
+//You can get your IP address by running the "hostname -I" command on terminal
+#define MQTT_HOST IPAddress(192, 168, 0, 0)
 #define MQTT_PORT 1883
 
 //topics
@@ -27,7 +31,7 @@
 #define increase D8
 
 int flow = 0;
-char* rain;
+double rain = 0.0;
 
 DHT dht(DHTPIN, DHTTYPE);
 
@@ -112,7 +116,9 @@ void onMqttMessage(char* topic, char* payload, AsyncMqttClientMessageProperties 
   Serial.println(index);
   Serial.print("  total: ");
   Serial.println(total);
-  rain = payload;
+  Serial.println(payload[0]);
+
+  rain = atof(payload);
 }
 
 void setup() {
@@ -139,7 +145,7 @@ void setup() {
 }
 
 void loop() {
-  delay(2000);
+  delay(5000);
 
   //Read wind speed
   float w = analogRead(A0)/50;
@@ -161,74 +167,81 @@ void loop() {
     Serial.println("Failed to read from DHT sensor!");
     return;
   }
-  int cWind, cHumidity, cTemperature;
-  
-  if(t > 15 && t < 32) {
-    cTemperature = 1;
-  }else{
-    cTemperature = 2;
-  }
 
-  if(h > 55 && h < 95) {
-    cHumidity = 1;
-  } else {
-    cHumidity = 2;
-  }
-
-  if(w > 2 && w < 10) {
-    cWind = 1;
-  } else {
-    cWind = 2;
-  }
-
-  float condition = (cTemperature + cWind + cHumidity) / 3.0;
-
-  if(condition == 1.00){
-    digitalWrite(blueLed, HIGH);
-    digitalWrite(redLed, LOW);
-    digitalWrite(yellowLed, LOW);
-  } else if (condition > 1 && condition < 1.34){
-    digitalWrite(blueLed, LOW);
-    digitalWrite(redLed, LOW);
-    digitalWrite(yellowLed, HIGH);
-  } else {
+  if (rain > 60.0){
     digitalWrite(blueLed, LOW);
     digitalWrite(redLed, HIGH);
     digitalWrite(yellowLed, LOW);
-  }
+  }else {
+    int cWind, cHumidity, cTemperature, cRain;
+    
+    if(t > 15 && t < 32) {
+      cTemperature = 1;
+    }else{
+      cTemperature = 2;
+    }
   
+    if(h > 55 && h < 95) {
+      cHumidity = 1;
+    } else {
+      cHumidity = 2;
+    }
+  
+    if(w > 2 && w < 10) {
+      cWind = 1;
+    } else {
+      cWind = 2;
+    }
+
+    if(rain > 40.0) {
+      cRain = 2;  
+    }else{
+      cRain = 1;
+    }
+  
+    float condition = (cTemperature + cWind + cHumidity + cRain) / 4.0;
+  
+    if(condition == 1.00){
+      digitalWrite(blueLed, HIGH);
+      digitalWrite(redLed, LOW);
+      digitalWrite(yellowLed, LOW);
+    } else if (condition > 1 && condition <= 1.25){
+      digitalWrite(blueLed, LOW);
+      digitalWrite(redLed, LOW);
+      digitalWrite(yellowLed, HIGH);
+    } else {
+      digitalWrite(blueLed, LOW);
+      digitalWrite(redLed, HIGH);
+      digitalWrite(yellowLed, LOW);
+    }
+  }
   Serial.print("Humidity: "); 
   Serial.print(h);
-  Serial.print(" %\t");
+  Serial.print(" % \t");
   Serial.print("Temperature: "); 
   Serial.print(t);
-  Serial.print(" *C ");
-  Serial.print("\t");
+  Serial.print(" ºC \t");
   Serial.print("Wind: ");
   Serial.print(w);
-  Serial.println(" Km/h ");
-  Serial.println("------------------------------------");
-  Serial.println(rain);
-  Serial.println("------------------------------------");
+  Serial.print(" Km/h \t");
+  Serial.print("Rain chances: ");
+  Serial.print(rain);
+  Serial.println(" %");
   
-  uint16_t packetIdPub1 = mqttClient.publish(MQTT_PUB_TEMP, 1, true, String(t).c_str());                            
-    Serial.printf("Publishing on topic %s at QoS 1, packetId: %i ", MQTT_PUB_TEMP, packetIdPub1);
-    Serial.printf("Message: %.2f \n", t);
+  uint16_t packetIdPub1 = mqttClient.publish(MQTT_PUB_TEMP, 1, true, String(t).c_str());
     
-  uint16_t packetIdPub2 = mqttClient.publish(MQTT_PUB_HUM, 1, true, String(h).c_str());                            
-    Serial.printf("Publishing on topic %s at QoS 1, packetId %i: ", MQTT_PUB_HUM, packetIdPub2);
-    Serial.printf("Message: %.2f \n", h);
+  uint16_t packetIdPub2 = mqttClient.publish(MQTT_PUB_HUM, 1, true, String(h).c_str());
     
   uint16_t packetIdPub3 = mqttClient.publish(MQTT_PUB_WIND, 1, true, String(w).c_str());                            
-    Serial.printf("Publishing on topic %s at QoS 1, packetId %i: ", MQTT_PUB_WIND, packetIdPub3);
-    Serial.printf("Message: %.2f \n", w);
+    Serial.printf("Publishing on topics %s, %s, %s at QoS 1: ", MQTT_PUB_WIND, MQTT_PUB_HUM, MQTT_PUB_TEMP);
+    Serial.printf("Messages: %.2f, %.2f, %.2f \n", w, h, t);
   
   if(flow > 0){
     Serial.print("*Spraying* \t Flow: ");
     Serial.print(flow);
     Serial.println(" L/s");
     uint16_t packetIdPub4 = mqttClient.publish(MQTT_PUB_FLOW, 1, true, String(flow).c_str());                            
-    Serial.printf("Publishing on topic %s at QoS 1, packetId %i: ", MQTT_PUB_FLOW, packetIdPub4);
+    Serial.printf("Publishing on topic %s at QoS 1: ", MQTT_PUB_FLOW);
     Serial.printf("Message: %.2f \n", flow);
   }
 }
